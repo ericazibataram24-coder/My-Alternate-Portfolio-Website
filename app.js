@@ -257,3 +257,33 @@ function switchView(viewId) {
     const target = document.getElementById(viewId);
     if (target) target.classList.add('active-panel');
 }
+
+async function handleGoogleAuth() {
+    // Prompt for simulation or easily bypass for direct demo access
+    const userEmail = prompt("Enter your Google Account Email to continue:", "user@gmail.com");
+    if (!userEmail) return;
+
+    // Split the email prefix to generate a dynamic username
+    const generatedUsername = userEmail.split('@')[0];
+
+    activeUserSession = {
+        username: generatedUsername,
+        email: userEmail,
+        dob: "2000-01-01"
+    };
+
+    // Save session state to local storage memory
+    localStorage.setItem('user_session', JSON.stringify(activeUserSession));
+
+    // Release interface dashboard elements
+    document.getElementById('auth-gateway').style.display = 'none';
+    document.getElementById('main-application-layout').style.display = 'block';
+    document.getElementById('prof-username').innerText = activeUserSession.username;
+    document.getElementById('settings-email').value = activeUserSession.email;
+    document.getElementById('settings-username').value = activeUserSession.username;
+    document.getElementById('settings-dob').value = activeUserSession.dob;
+
+    fetchAndRenderPosts();
+    startLiveSync();
+    alert(`Successfully authenticated via Google as ${userEmail}!`);
+}
