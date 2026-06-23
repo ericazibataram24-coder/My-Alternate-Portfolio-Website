@@ -1,133 +1,131 @@
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware configuration
+// Connect directly to your live MongoDB cloud URI string configured on Render
+const MONGO_URI = process.env.MONGODB_URI;
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('[-] DATABASE CONNECTED PERMANENTLY TO CLOUD ATOMS'))
+    .catch(err => console.error('Database connection error:', err));
+
+// Database Schema Blueprint Rules
+const UserSchema = new mongoose.Schema({
+    username: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    dob: String,
+    password: { type: String, required: true }
+});
+
+const PostSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    category: { type: String, default: "General" },
+    body: { type: String, required: true },
+    comments: [{
+        id: String,
+        text: String,
+        likes: { type: Number, default: 0 }
+    }],
+    createdAt: { type: Date, default: Date.now }
+});
+
+const User = mongoose.model('User', UserSchema);
+const Post = mongoose.model('Post', PostSchema);
+
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '/')));
 
-// Serve static frontend files (index.html, App.js, style.css) out of the root folder
-app.use(express.static(path.join(__dirname, './')));
-
-// Simulated live server databases
-let databaseUsers = [];
-let databasePosts = [
-        {
-                    id: "post_101",
-                            title: "Welcome to the Platform Engine",
-                                    category: "Tech",
-                                            body: "This is the very first official article on our dynamic feed. Built with a crisp navy and white layout!",
-                                                    comments: [
-                                                                    { id: "c_1", text: "System Account: Wow, this layout looks great!", likes: 3 }
-                                                    ]
-        }
-];
-
-// 1. API: Handle Account Registrations
-app.post('/api/auth/signup', (req, res) => {
+// --- AUTHENTICATION ENDPOINTS ---
+app.post('/api/auth/signup', async (req, res) => {
+    try {
         const { username, email, dob, password } = req.body;
-
-            if (!username || !email || !dob || !password) {
-                        return res.status(400).json({ error: "Missing required registration parameters." });
-            }
-
-                const checkUserExist = databaseUsers.find(user => user.email === email);
-                    if (checkUserExist) {
-                                return res.status(400).json({ error: "An account with this email address already exists." });
-                    }
-
-                        const newUser = { username, email, dob, password };
-                            databaseUsers.push(newUser);
-
-                                return res.status(201).json({ message: "Registration successful!", user: { username, email, dob } });
+        const exactMatch = await User.findOne({ email: email.toLowerCase() });
+        if (exactMatch) {
+            return res.status(400).json({ error: "An account with this email already exists." });
+        }
+        const newUser = new User({ username, email: email.toLowerCase(), dob, password });
+        await newUser.save();
+        res.status(201).json({ message: "Registration successful!" });
+    } catch (err) {
+        res.status(500).json({ error: "Internal server error during account assembly." });
+    }
 });
 
-// 2. API: Handle Account Authentication Logins
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
+    try {
         const { email, password } = req.body;
-
-            if (!email || !password) {
-                        return res.status(400).json({ error: "Please enter both your email address and password." });
-            }
-
-                const targetUser = databaseUsers.find(user => user.email === email);
-                    
-                        if (!targetUser) {
-                                    return res.status(401).json({ error: "Authentication Failed: Account profile not found." });
-                        }
-
-                            if (targetUser.password !== password) {
-                                        return res.status(401).json({ error: "Authentication Failed: Incorrect password string." });
-                            }
-
-                                // Success response
-                                    return res.json({ 
-                                                message: "Login authorized!", 
-                                                        user: { username: targetUser.username, email: targetUser.email, dob: targetUser.dob } 
-                                    });
+        const targetUser = await User.findOne({ email: email.toLowerCase() });
+        if (!targetUser || targetUser.password !== password) {
+            return res.status(401).json({ error: "Invalid email or master security password alignment." });
+        }
+        res.status(200).json({
+            message: "Authentication clear!",
+            user: { username: targetUser.username, email: targetUser.email, dob: targetUser.dob }
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to read database parameters." });
+    }
 });
 
-// 3. API: Get All Community Articles Feed
-app.get('/api/posts', (req, res) => {
-        res.json(databasePosts);
+// --- FEED & ARTICLES ENDPOINTS ---
+app.get('/api/posts', async (req, res) => {
+    try {
+        const posts = await Post.find().sort({ createdAt: -1 });
+        res.status(200).json(posts);
+    } catch (err) {
+        res.status(500).json({ error: "Unable to retrieve database streams." });
+    }
 });
 
-// 4. API: Create & Format Blogger-Style Article
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', async (req, res) => {
+    try {
         const { title, category, body } = req.body;
-
-            if (!title || !body) {
-                        return res.status(400).json({ error: "Title and body text are mandatory." });
-            }
-
-                const newPost = {
-                            id: `post_${Date.now()}`,
-                                    title,
-                                            category: category || "General",
-                                                    body,
-                                                            comments: []
-                };
-
-                    databasePosts.unshift(newPost);
-                        res.status(201).json({ message: "Article published successfully!", post: newPost });
+        const freshPost = new Post({ title, category, body, comments: [] });
+        await freshPost.save();
+        res.status(201).json(freshPost);
+    } catch (err) {
+        res.status(500).json({ error: "Database rejected article insertion parameters." });
+    }
 });
 
-// 5. API: Append Comments to a Specific Post ID
-app.post('/api/posts/:id/comments', (req, res) => {
-        const postId = req.params.id;
-            const { commentText } = req.body;
-
-                const post = databasePosts.find(p => p.id === postId);
-                    if (!post) return res.status(404).json({ error: "Article not found." });
-
-                        const newComment = {
-                                    id: `c_${Date.now()}`,
-                                            text: commentText,
-                                                    likes: 0
-                        };
-
-                            post.comments.push(newComment);
-                                res.status(201).json(post);
+app.post('/api/posts/:postId/comments', async (req, res) => {
+    try {
+        const { commentText } = req.body;
+        const post = await Post.findById(req.params.postId);
+        if (!post) return res.status(404).json({ error: "Post target missing." });
+        
+        post.comments.push({
+            id: 'c_' + Math.random().toString(36).substr(2, 9),
+            text: commentText,
+            likes: 0
+        });
+        await post.save();
+        res.status(201).json(post);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to save comment record." });
+    }
 });
 
-// 6. API: Handle Comment Likes
-app.post('/api/posts/:postId/comments/:commentId/like', (req, res) => {
-        const { postId, commentId } = req.params;
-            
-                const post = databasePosts.find(p => p.id === postId);
-                    if (!post) return res.status(404).json({ error: "Article not found." });
-
-                        const comment = post.comments.find(c => c.id === commentId);
-                            if (!comment) return res.status(404).json({ error: "Comment not found." });
-
-                                comment.likes += 1;
-                                    res.json(post);
+app.post('/api/posts/:postId/comments/:commentId/like', async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.postId);
+        if (!post) return res.status(404).json({ error: "Target stream closed." });
+        const comment = post.comments.id(req.params.commentId);
+        if (comment) {
+            comment.likes += 1;
+            await post.save();
+        }
+        res.status(200).json(post);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to increment comment counter metrics." });
+    }
 });
 
-// Start listening engine
 app.listen(PORT, () => {
-        console.log(`[-] SERVER CORE STREAMING ONLINE ON PORT: ${PORT}`);
+    console.log(`[-] ECO-SYSTEM PERMANENT INSTANCE LIVE ON PORT: ${PORT}`);
 });
