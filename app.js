@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'https://my-alternate-portfolio-website-wiqi.onrender.com/api';
 let activeUserSession = null;
 let postRefreshInterval = null;
 
