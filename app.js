@@ -215,3 +215,14 @@ function switchView(viewId) {
     const target = document.getElementById(viewId);
     if (target) target.classList.add('active-panel');
 }
+
+function handleSystemLogout() {
+    activeUserSession = null;
+    // Hide the main platform dashboard
+    document.getElementById('main-application-layout').style.display = 'none';
+    // Pop the security gateway login overlay back up
+    document.getElementById('auth-gateway').style.display = 'flex';
+    // Clear secret form memory fields
+    document.getElementById('login-password').value = '';
+    alert("You have been securely logged out of your session.");
+}
