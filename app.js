@@ -1,5 +1,30 @@
 const API_BASE_URL = '/api';
 let activeUserSession = null;
+let postRefreshInterval = null;
+
+// On page load, check if user was already logged in
+window.addEventListener('DOMContentLoaded', () => {
+    const savedSession = localStorage.getItem('user_session');
+    if (savedSession) {
+        activeUserSession = JSON.parse(savedSession);
+        document.getElementById('auth-gateway').style.display = 'none';
+        document.getElementById('main-application-layout').style.display = 'block';
+        document.getElementById('prof-username').innerText = activeUserSession.username;
+        document.getElementById('settings-email').value = activeUserSession.email;
+        document.getElementById('settings-username').value = activeUserSession.username;
+        document.getElementById('settings-dob').value = activeUserSession.dob;
+        
+        // Start live sync
+        fetchAndRenderPosts();
+        startLiveSync();
+    }
+});
+
+function startLiveSync() {
+    if (postRefreshInterval) clearInterval(postRefreshInterval);
+    // Automatically fetch fresh posts from backend every 7 seconds for all users online
+    postRefreshInterval = setInterval(fetchAndRenderPosts, 7000);
+}
 
 function toggleAuthForm(mode) {
     const loginForm = document.getElementById('form-login-view');
@@ -39,11 +64,7 @@ async function handleSystemSignup() {
             alert(data.error || "An error occurred during signup.");
             return;
         }
-        alert("Account created on backend successfully! Turning you over to log in view.");
-        document.getElementById('signup-username').value = '';
-        document.getElementById('signup-email').value = '';
-        document.getElementById('signup-dob').value = '';
-        document.getElementById('signup-password').value = '';
+        alert("Account created successfully!");
         toggleAuthForm('login');
     } catch (err) {
         alert("Error: Unable to reach backend server connection.");
@@ -69,24 +90,35 @@ async function handleSystemLogin() {
             return;
         }
         activeUserSession = data.user;
+        
+        // Save session locally so refreshing doesn't log you out
+        localStorage.setItem('user_session', JSON.stringify(activeUserSession));
+
         document.getElementById('auth-gateway').style.display = 'none';
         document.getElementById('main-application-layout').style.display = 'block';
         document.getElementById('prof-username').innerText = activeUserSession.username;
         document.getElementById('settings-email').value = activeUserSession.email;
         document.getElementById('settings-username').value = activeUserSession.username;
         document.getElementById('settings-dob').value = activeUserSession.dob;
+        
         fetchAndRenderPosts();
+        startLiveSync();
     } catch (err) {
         alert("Error linking connection directly to the server backend runtime.");
     }
 }
+
 async function fetchAndRenderPosts() {
     try {
         const response = await fetch(`${API_BASE_URL}/posts`);
         const posts = await response.json();
         const container = document.getElementById('dynamic-posts-container');
         if (!container) return;
+        
+        // Save scroll position so page doesn't jump during auto-refresh
+        const oldScroll = window.scrollY;
         container.innerHTML = "";
+        
         posts.forEach((post) => {
             let commentsHTML = "";
             post.comments.forEach((comment) => {
@@ -205,6 +237,16 @@ async function likeComment(postId, commentId) {
     } catch (err) { console.error("Unable to patch target comment like count."); }
 }
 
+function handleSystemLogout() {
+    activeUserSession = null;
+    if (postRefreshInterval) clearInterval(postRefreshInterval);
+    localStorage.removeItem('user_session');
+    document.getElementById('main-application-layout').style.display = 'none';
+    document.getElementById('auth-gateway').style.display = 'flex';
+    document.getElementById('login-password').value = '';
+    alert("You have been securely logged out.");
+}
+
 function updateAccountSettings() {
     alert("Configurations saved locally.");
 }
@@ -214,15 +256,4 @@ function switchView(viewId) {
     panels.forEach(p => p.classList.remove('active-panel'));
     const target = document.getElementById(viewId);
     if (target) target.classList.add('active-panel');
-}
-
-function handleSystemLogout() {
-    activeUserSession = null;
-    // Hide the main platform dashboard
-    document.getElementById('main-application-layout').style.display = 'none';
-    // Pop the security gateway login overlay back up
-    document.getElementById('auth-gateway').style.display = 'flex';
-    // Clear secret form memory fields
-    document.getElementById('login-password').value = '';
-    alert("You have been securely logged out of your session.");
 }
