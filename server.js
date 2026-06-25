@@ -124,3 +124,22 @@ app.get('/api/posts/:id', async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Enterprise Node Engine listening on port ${PORT}`));
+
+// Global system state controlled exclusively by you
+let systemControlMatrix = {
+    maintenanceMode: false,
+    allowSignups: true
+};
+
+// Route that listens to your switches and logs updates to your terminal
+app.post('/api/admin/toggle-control', (req, res) => {
+    const { settingKey, targetState } = req.body;
+    
+    if (systemControlMatrix.hasOwnProperty(settingKey)) {
+        systemControlMatrix[settingKey] = targetState;
+        console.log(`⚙️ [TERMINAL UPDATE]: ${settingKey} has been toggled to ${targetState}`);
+        return res.json({ status: "success" });
+    }
+    
+    res.status(400).json({ error: "Invalid setting key" });
+});
