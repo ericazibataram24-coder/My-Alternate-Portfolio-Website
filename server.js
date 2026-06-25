@@ -2,68 +2,123 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
-app.use(express.static(__dirname)); // Static file serving rule added for production deployment
+app.use(express.static(__dirname));
 
 const PROD_KEY = "system_production_hash_token_string_key_value";
+const MONGO_URI = "mongodb+srv://ericazibataram24_db_user:ericazibataram24_db_user@mywebsite.hsh2yld.mongodb.net/biopulse?retryWrites=true&w=majority"; 
 
-let databaseUsers = [{
-    id: 11111,
-    email: "admin@test.com", 
-    dob: "2000-01-01",
-    password: bcrypt.hashSync("admin123", 10), 
-    role: "admin"
-}];
-let databasePosts = [];
+// Connect to MongoDB Atlas
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("🔥 MongoDB Connected Permanently!"))
+    .catch(err => console.error("Database connection failure:", err));
 
+// Define Database Schemas
+const UserSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    dob: { type: String, required: true },
+    password: { type: String, required: true },
+    role: { type: String, default: 'reader' }
+});
+const User = mongoose.model('User', UserSchema);
+
+const PostSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    privacy: { type: String, required: true },
+    label: { type: String, required: true },
+    content: { type: String, required: true },
+    editorType: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+const Post = mongoose.model('Post', PostSchema);
+
+// Automatically Seed Master Admin Account if database is fresh
+async function seedAdmin() {
+    const adminExists = await User.findOne({ email: "admin@test.com" });
+    if (!adminExists) {
+        const hashedAdminPassword = await bcrypt.hash("admin123", 10);
+        await User.create({
+            email: "admin@test.com",
+            dob: "2000-01-01",
+            password: hashedAdminPassword,
+            role: "admin"
+        });
+        console.log("👑 Default Admin Seeded into Cloud Database.");
+    }
+}
+seedAdmin();
+
+// API ENDPOINTS
 app.post('/api/signup', async (req, res) => {
-    const { email, dob, password } = req.body;
-    if (databaseUsers.find(u => u.email === email)) return res.status(400).json({ error: "Email taken." });
+    try {
+        const { email, dob, password } = req.body;
+        const existingUser = await User.findOne({ email });
+        if (existingUser) return res.status(400).json({ error: "Email taken." });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    databaseUsers.push({ id: Date.now(), email, dob, password: hashedPassword, role: "reader" });
-    res.status(201).json({ message: "Reader registration complete!" });
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await User.create({ email, dob, password: hashedPassword, role: "reader" });
+        res.status(201).json({ message: "Reader registration complete!" });
+    } catch (err) {
+        res.status(500).json({ error: "Server Registration Error" });
+    }
 });
 
 app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
-    const user = databaseUsers.find(u => u.email === email);
-    if (!user) return res.status(404).json({ error: "Account not found." });
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ error: "Account not found." });
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: "Wrong password." });
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) return res.status(401).json({ error: "Wrong password." });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, PROD_KEY, { expiresIn: '12h' });
-    res.json({ token, user: { email: user.email, dob: user.dob, role: user.role } });
-});
-
-app.post('/api/posts', (req, res) => {
-    const { title, privacy, label, content, editorType } = req.body;
-    const postRecord = { id: String(Date.now()), title, privacy, label, content, editorType };
-    databasePosts.push(postRecord);
-    res.json({ status: "success" });
-});
-
-app.get('/api/posts', (req, res) => {
-    const safeSummary = databasePosts.map(p => ({ id: p.id, title: p.title, privacy: p.privacy, label: p.label }));
-    res.json(safeSummary);
-});
-
-app.get('/api/posts/:id', (req, res) => {
-    const targetPost = databasePosts.find(p => p.id === req.params.id);
-    if (!targetPost) return res.status(404).json({ error: "Document lost." });
-
-    if (targetPost.privacy === 'public') {
-        return res.json(targetPost);
+        const token = jwt.sign({ id: user._id, role: user.role }, PROD_KEY, { expiresIn: '12h' });
+        res.json({ token, user: { email: user.email, dob: user.dob, role: user.role } });
+    } catch (err) {
+        res.status(500).json({ error: "Server Login Error" });
     }
+});
 
-    const headerAuth = req.headers['authorization'];
-    if (!headerAuth || headerAuth === "Bearer null") return res.status(403).json({ error: "Resource locked." });
+app.post('/api/posts', async (req, res) => {
+    try {
+        const { title, privacy, label, content, editorType } = req.body;
+        await Post.create({ title, privacy, label, content, editorType });
+        res.json({ status: "success" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to save post." });
+    }
+});
 
-    res.json(targetPost);
+app.get('/api/posts', async (req, res) => {
+    try {
+        const posts = await Post.find({}, 'title privacy label').sort({ createdAt: -1 });
+        const safeSummary = posts.map(p => ({ id: p._id, title: p.title, privacy: p.privacy, label: p.label }));
+        res.json(safeSummary);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to load feed." });
+    }
+});
+
+app.get('/api/posts/:id', async (req, res) => {
+    try {
+        const targetPost = await Post.findById(req.params.id);
+        if (!targetPost) return res.status(404).json({ error: "Document lost." });
+
+        if (targetPost.privacy === 'public') {
+            return res.json(targetPost);
+        }
+
+        const headerAuth = req.headers['authorization'];
+        if (!headerAuth || headerAuth === "Bearer null") return res.status(403).json({ error: "Resource locked." });
+
+        res.json(targetPost);
+    } catch (err) {
+        res.status(500).json({ error: "Access Evaluation Error" });
+    }
 });
 
 const PORT = process.env.PORT || 5000;
