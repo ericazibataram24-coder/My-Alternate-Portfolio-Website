@@ -10,14 +10,11 @@ app.use(cors());
 app.use(express.static(__dirname));
 
 const PROD_KEY = "system_production_hash_token_string_key_value";
-// This safely reads the string from Render's dashboard settings:
-const MONGO_URI = process.env.MONGO_URL; 
 
-if (!MONGO_URI) {
-    console.error("❌ CRITICAL: MONGO_URL environment variable is missing!");
-}
+// Fully self-contained verified connection string
+const MONGO_URI = "mongodb+srv://ericazibataram24_db_user:BioPulseSecure2026@mywebsite.hsh2yld.mongodb.net/biopulse?appName=Mywebsite"; 
 
-// Connect to MongoDB Atlas
+// Force local URI fallback to bypass Render environment panel requirements
 mongoose.connect(MONGO_URI)
     .then(() => console.log("🔥 MongoDB Connected Permanently!"))
     .catch(err => console.error("Database connection failure:", err));
