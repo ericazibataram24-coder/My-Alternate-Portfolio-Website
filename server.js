@@ -10,7 +10,12 @@ app.use(cors());
 app.use(express.static(__dirname));
 
 const PROD_KEY = "system_production_hash_token_string_key_value";
-const MONGO_URI = "mongodb+srv://ericazibataram24_db_user:ericazibataram24_db_user@mywebsite.hsh2yld.mongodb.net/biopulse?retryWrites=true&w=majority"; 
+// This safely reads the string from Render's dashboard settings:
+const MONGO_URI = process.env.MONGO_URL; 
+
+if (!MONGO_URI) {
+    console.error("❌ CRITICAL: MONGO_URL environment variable is missing!");
+}
 
 // Connect to MongoDB Atlas
 mongoose.connect(MONGO_URI)
@@ -36,7 +41,6 @@ const PostSchema = new mongoose.Schema({
 });
 const Post = mongoose.model('Post', PostSchema);
 
-// Automatically Seed Master Admin Account if database is fresh
 async function seedAdmin() {
     const adminExists = await User.findOne({ email: "admin@test.com" });
     if (!adminExists) {
