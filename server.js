@@ -143,3 +143,12 @@ app.post('/api/admin/toggle-control', (req, res) => {
     
     res.status(400).json({ error: "Invalid setting key" });
 });
+
+// Admin verification middleware to prevent unauthorized posts
+app.post('/api/posts/compose', (req, res, next) => {
+    if (req.session && req.session.user && req.session.user.isAdmin) {
+        return next();
+    } else {
+        return res.status(403).send("Access Denied: Only Eric can publish posts.");
+    }
+});
