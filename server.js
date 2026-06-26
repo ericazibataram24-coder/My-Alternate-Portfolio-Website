@@ -152,3 +152,12 @@ app.post('/api/posts/compose', (req, res, next) => {
         return res.status(403).send("Access Denied: Only Eric can publish posts.");
     }
 });
+app.delete('/api/posts/:id', async (req, res) => {
+try {
+const postId = req.params.id;
+await Post.findByIdAndDelete(postId);
+res.status(200).json({ success: true });
+} catch (error) {
+res.status(500).json({ success: false, error: error.message });
+}
+});
