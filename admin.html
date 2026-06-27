@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioPulse Nexus - Admin Gateway</title>
+    <style>
+        body { background-color: #f4f6f9; font-family: system-ui, sans-serif; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 90vh; }
+        .lock-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 360px; width: 100%; }
+        .admin-input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; text-align: center; font-size: 11pt; }
+        .verify-btn { width: 100%; background-color: #16a085; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11pt; }
+        .settings-container { display: none; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 600px; }
+        .section-title { font-size: 12pt; color: #16a085; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #edf2f7; padding-bottom: 5px; font-weight: bold; text-transform: uppercase; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f7fafc; }
+    </style>
+</head>
+<body>
+
+<div class="lock-container" id="lockScreen">
+    <h2>🔒 Admin Gateway</h2>
+    <p style="color: #718096; font-size: 10pt;">Log in with your master credentials.</p>
+    <input type="text" id="adminUser" class="admin-input" placeholder="Username (email)">
+    <input type="password" id="adminPassword" class="admin-input" placeholder="••••••••">
+    <button class="verify-btn" onclick="checkPassword()">Unlock Console</button>
+</div>
+
+<div class="settings-container" id="settingsPanel">
+    <h2>🔧 Blog Management Console</h2>
+    <p style="color: #718096; font-size: 10pt;">Exclusive control panel for admin@test.com</p>
+    
+    <div class="section-title">Manage Publications</div>
+    <div id="adminPostListContainer">
+        <p style="color: #718096; font-size: 10pt;">Loading active blog posts...</p>
+    </div>
+</div>
+
+<script>
+function checkPassword() {
+    const userVal = document.getElementById('adminUser').value;
+    const passVal = document.getElementById('adminPassword').value;
+
+    fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: userVal, password: passVal })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('lockScreen').style.display = 'none';
+            document.getElementById('settingsPanel').style.display = 'block';
+            loadAdminPostsForDeletion();
+        } else {
+            alert('Authentication Failed.');
+        }
+    })
+    .catch(err => alert('Authentication system link offline.'));
+}
+
+function loadAdminPostsForDeletion() {
+    fetch('/api/posts')
+        .then(res => res.json())
+        .then(posts => {
+            const container = document.getElementById('adminPostListContainer');
+            if(!posts || posts.length === 0) {
+                container.innerHTML = '<p style="color: #718096; font-size: 10pt;">No posts found.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            posts.forEach(post => {
+                const row = document.createElement('div');
+                row.className = 'setting-row';
+                row.innerHTML = `
+                    <span style="font-weight:600; color:#2d3748;">${post.title}</span>
+                    <button onclick="executePostDelete('${post._id}')" style="background:#e74c3c; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold;">Delete</button>
+                `;
+                container.appendChild(row);
+            });
+        });
+}
+
+function executePostDelete(postId) {
+    if (confirm('Permanently delete this publication?')) {
+        fetch('/api/posts/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId: postId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert('Deleted.');
+            loadAdminPostsForDeletion();
+        });
+    }
+}
+</script>
+</body>
+</html>

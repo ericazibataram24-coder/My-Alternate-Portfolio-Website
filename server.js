@@ -180,3 +180,8 @@ app.post('/api/posts/delete', verifyIsEric, (req, res) => {
     // Your existing code to delete from MongoDB goes here
     res.json({ success: true, message: "Deleted successfully!" });
 });
+
+// Explicitly serve your standalone admin.html file when requested
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
