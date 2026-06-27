@@ -161,3 +161,22 @@ res.status(200).json({ success: true });
 res.status(500).json({ success: false, error: error.message });
 }
 });
+
+// STRICT MASTER LOCK: Only allow admin@test.com to compose or delete posts
+function verifyIsEric(req, res, next) {
+    if (req.session && req.session.user && req.session.user.username === 'admin@test.com') {
+        return next();
+    } else {
+        return res.status(403).json({ error: "Access Denied: Only Eric (admin@test.com) has permission to modify this blog." });
+    }
+}
+
+app.post('/api/posts/compose', verifyIsEric, (req, res) => {
+    // Your existing code to save the post to MongoDB goes here
+    res.json({ success: true, message: "Published successfully!" });
+});
+
+app.post('/api/posts/delete', verifyIsEric, (req, res) => {
+    // Your existing code to delete from MongoDB goes here
+    res.json({ success: true, message: "Deleted successfully!" });
+});
